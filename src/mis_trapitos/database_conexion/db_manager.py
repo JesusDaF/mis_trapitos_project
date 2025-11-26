@@ -2,6 +2,7 @@ import os
 import psycopg2
 from psycopg2 import Error
 from dotenv import load_dotenv
+from mis_trapitos.core.logger import log
 
 load_dotenv()
 
@@ -28,7 +29,7 @@ class DBManager:
             )
             return conexion_bd
         except Error as error_detectado:
-            print(f"Error al conectar a PostgreSQL: {error_detectado}")
+            log.error(f"Fallo crítico de conexión a BD: {error_detectado}")
             return None
 
     def cerrarConexion(self, conexion_activa):
@@ -63,7 +64,7 @@ class DBManager:
                     # print("Consulta ejecutada y guardada (Auto-commit)")
 
             except Error as e:
-                print(f"Error al ejecutar consulta: {e}")
+                log.error(f"Error SQL en ejecutarConsulta: {e} | Query: {query_sql}")
                 # Si es conexión externa, el error debe propagarse para que el controlador haga rollback
                 if usar_conexion_externa:
                     raise e 
@@ -100,7 +101,7 @@ class DBManager:
                     conn.commit()
 
             except Error as e:
-                print(f"Error al ejecutar INSERT RETURNING: {e}")
+                log.error(f"Error SQL en ejecutarInsertReturning: {e} | Query: {query_sql}")
                 if usar_conexion_externa:
                     raise e
             finally:
@@ -127,7 +128,7 @@ class DBManager:
                 
                 resultados = cursor.fetchall()
             except Error as e:
-                print(f"Error al obtener datos: {e}")
+                log.error(f"Error SQL en obtenerDatos: {e}")
                 if usar_conexion_externa:
                     raise e
             finally:

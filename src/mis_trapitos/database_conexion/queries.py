@@ -1,4 +1,5 @@
 from mis_trapitos.database_conexion.db_manager import DBManager
+from mis_trapitos.core.logger import log
 
 class InventarioQueries:
     """Clase que agrupa las consultas relacionadas con productos y categorías"""
@@ -161,19 +162,30 @@ class VentasQueries:
         return filas > 0
 
 class UsuariosQueries:
-    """Maneja la autenticación y auditoría de empleados"""
+    """
+    Gestiona la seguridad, autenticación y auditoría de los empleados"""
     
     def __init__(self):
         self.db = DBManager()
 
     def obtenerUsuarioPorUser(self, usuario, conexion_externa=None):
-        """Busca datos de login."""
-        sql = "SELECT id_empleado, nombre_completo, hash_contrasena, rol FROM Empleados WHERE usuario = %s AND activo = TRUE"
-        resultado = self.db.obtenerDatos(sql, (usuario,), conexion_externa)
-        return resultado[0] if resultado else None
+        """
+        Busca un empleado activo por su nombre de usuario para el Login.
+        Retorna: (id_empleado, nombre, hash_contrasena, rol)
+        """
+        sql = """
+            SELECT id_empleado, nombre_completo, hash_contrasena, rol 
+            FROM Empleados 
+            WHERE usuario = %s AND activo = TRUE
+        """
+        # datos_usuario almacena la tupla con la info del empleado encontrado
+        datos_usuario = self.db.obtenerDatos(sql, (usuario,), conexion_externa)
+        
+        return datos_usuario[0] if datos_usuario else None
 
     def registrarLog(self, id_empleado, accion, descripcion, conexion_externa=None):
-        """Guarda un movimiento en la bitácora. CRÍTICO: Soporta transacción."""
+        """
+        Guarda un registro en la bitácora de movimientos (Auditoría)"""
         sql = """
             INSERT INTO Log_Movimientos (id_empleado, accion, descripcion_detallada)
             VALUES (%s, %s, %s)
@@ -183,3 +195,125 @@ class UsuariosQueries:
             (id_empleado, accion, descripcion), 
             conexion_externa
         )
+
+    def crearEmpleado(self, nombre, usuario, hash_contrasena, rol='empleado', conexion_externa=None):
+        """
+        Registra un nuevo empleado en el sistema.
+        """
+        sql = """
+            INSERT INTO Empleados (nombre_completo, usuario, hash_contrasena, rol)
+            VALUES (%s, %s, %s, %s) RETURNING id_empleado
+        """
+        resultado = self.db.ejecutarInsertReturning(
+            sql,
+            (nombre, usuario, hash_contrasena, rol),
+            conexion_externa
+        )
+        if resultado:
+            return resultado[0]
+        return None 
+    
+
+class ProveedoresQueries:
+    """
+    Gestiona la información de proveedores y su relación con los productos"""
+
+    def __init__(self):
+        self.db = DBManager()
+
+    def registrarProveedor(self, nombre_proveedor, datos_contacto, conexion_externa=None):
+        """
+        Registra un nuevo proveedor en la base de datos.
+        """
+        sql = """
+            INSERT INTO Proveedores (nombre_proveedor, datos_contacto)
+            VALUES (%s, %s) RETURNING id_proveedor
+        """
+        # id_nuevo_proveedor captura el ID generado tras la inserción
+        id_nuevo_proveedor = self.db.ejecutarInsertReturning(
+            sql, 
+            (nombre_proveedor, datos_contacto), 
+            conexion_externa
+        )
+        
+        if id_nuevo_proveedor:
+            return id_nuevo_proveedor[0]
+        return None
+
+    def obtenerProveedores(self, conexion_externa=None):
+        """
+        Obtiene la lista completa de proveedores registrados.
+        """
+        sql = "SELECT id_proveedor, nombre_proveedor, datos_contacto FROM Proveedores"
+        return self.db.obtenerDatos(sql, conexion_externa=conexion_externa)
+
+    def asociarProductoProveedor(self, id_proveedor, id_producto, conexion_externa=None):
+        """
+        Vincula un producto a un proveedor para saber quién lo surte (Reposición).
+        """
+        sql = """
+            INSERT INTO Proveedores_Productos (id_proveedor, id_producto)
+            VALUES (%s, %s)
+        """
+        # filas_afectadas indica si la asociación se guardó correctamente
+        filas_afectadas = self.db.ejecutarConsulta(
+            sql,
+            (id_proveedor, id_producto),
+            conexion_externa
+        )
+        return filas_afectadas > 0
+
+    def obtenerProveedoresDeProducto(self, id_producto, conexion_externa=None):
+        """
+        Consulta qué proveedores surten un producto específico.
+        """
+        sql = """
+            SELECT p.id_proveedor, p.nombre_proveedor, p.datos_contacto
+            FROM Proveedores p
+            JOIN Proveedores_Productos pp ON p.id_proveedor = pp.id_proveedor
+            WHERE pp.id_producto = %s
+        """
+        return self.db.obtenerDatos(sql, (id_producto,), conexion_externa) 
+    
+class DescuentosQueries:
+    """
+    Gestiona las ofertas y promociones (RF 1.1).
+    """
+    def __init__(self):
+        self.db = DBManager()
+
+    def registrarDescuento(self, id_producto, porcentaje, fecha_inicio, fecha_fin, conexion_externa=None):
+        """
+        Crea una nueva regla de descuento para un producto.
+        """
+        sql = """
+            INSERT INTO Descuentos (id_producto, porcentaje, fecha_inicio, fecha_fin)
+            VALUES (%s, %s, %s, %s) RETURNING id_descuento
+        """
+        resultado = self.db.ejecutarInsertReturning(
+            sql, 
+            (id_producto, porcentaje, fecha_inicio, fecha_fin),
+            conexion_externa
+        )
+        return resultado[0] if resultado else None
+
+    def obtenerDescuentoActivo(self, id_variante, conexion_externa=None):
+        """
+        Busca si existe un descuento VIGENTE para el producto asociado a una variante.
+        Retorna el porcentaje (decimal) o None.
+        Usa CURRENT_DATE de PostgreSQL para comparar fechas.
+        """
+        sql = """
+            SELECT d.porcentaje 
+            FROM Descuentos d
+            JOIN Variantes_Producto v ON v.id_producto = d.id_producto
+            WHERE v.id_variante = %s 
+              AND d.fecha_inicio <= CURRENT_DATE 
+              AND d.fecha_fin >= CURRENT_DATE
+            ORDER BY d.porcentaje DESC -- Si hay dos ofertas, toma la mayor
+            LIMIT 1
+        """
+        res = self.db.obtenerDatos(sql, (id_variante,), conexion_externa)
+        if res:
+            return float(res[0][0])
+        return 0.0
