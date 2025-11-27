@@ -1,3 +1,5 @@
+## Controlador de autenticación
+
 import hashlib
 from mis_trapitos.database_conexion.queries import UsuariosQueries
 from mis_trapitos.core.logger import log
@@ -82,19 +84,24 @@ class AuthController:
             return False, "La contraseña es muy corta (mínimo 4 caracteres)."
 
         try:
-            # Generar hash para guardar seguro
             hash_pass = self._generarHash(contrasena)
             
-            # Intentar guardar
             nuevo_id = self.queries.crearEmpleado(nombre, usuario, hash_pass, rol)
             
             if nuevo_id:
-                log.info(f"Nuevo empleado registrado: '{usuario}' (ID: {nuevo_id}) creado por Admin ID {usuario_admin_actual['id']}.")
+                # --- NUEVO: AUDITORÍA EN BD ---
+                # Registramos quién creó al empleado
+                self.queries.registrarLog(
+                    id_empleado=usuario_admin_actual['id'], 
+                    accion="REGISTRO EMPLEADO", 
+                    descripcion=f"Se creó el usuario '{usuario}' con rol '{rol}'."
+                )
+                
+                log.info(f"Nuevo empleado registrado: '{usuario}' (ID: {nuevo_id}).")
                 return True, f"Empleado registrado con ID {nuevo_id}"
             else:
-                # si el usuario (UNIQUE) ya existe
-                log.error(f"Fallo al registrar empleado '{usuario}'. Posible duplicado.")
-                return False, "Error al registrar (posiblemente el usuario ya existe)."
+                log.error(f"Fallo al registrar empleado '{usuario}'.")
+                return False, "Error al registrar (posiblemente ya existe)."
 
         except Exception as e:
             log.error(f"Excepción al registrar empleado '{usuario}': {e}")

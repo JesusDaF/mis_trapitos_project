@@ -1,9 +1,10 @@
+## Generador de reportes
+
 from mis_trapitos.database_conexion.db_manager import DBManager
 
 class ReportQueries:
     """
     Clase dedicada exclusivamente a la generación de reportes y estadísticas.
-    Corresponde a la sección '3. Consultas a Desarrollar' de los requerimientos.
     """
 
     def __init__(self):

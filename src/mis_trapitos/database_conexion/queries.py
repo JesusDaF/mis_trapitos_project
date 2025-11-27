@@ -1,3 +1,5 @@
+## Consultas a la base de datos
+
 from mis_trapitos.database_conexion.db_manager import DBManager
 from mis_trapitos.core.logger import log
 

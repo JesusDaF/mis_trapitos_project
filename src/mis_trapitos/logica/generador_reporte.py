@@ -1,3 +1,5 @@
+## Controlador de generación de reportes
+
 from mis_trapitos.database_conexion.reporte_queries import ReportQueries
 from mis_trapitos.core.logger import log
 

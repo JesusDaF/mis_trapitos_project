@@ -1,5 +1,7 @@
+## Controlador de productos
+
 from datetime import datetime
-from mis_trapitos.database_conexion.queries import InventarioQueries, ProveedoresQueries
+from mis_trapitos.database_conexion.queries import InventarioQueries, ProveedoresQueries, UsuariosQueries
 from mis_trapitos.core.logger import log
 
 class ProductController:
@@ -11,16 +13,22 @@ class ProductController:
     def __init__(self):
         self.inv_queries = InventarioQueries()
         self.prov_queries = ProveedoresQueries()
+        self.usr_queries = UsuariosQueries()
 
-    def crearNuevaCategoria(self, nombre, descripcion):
-        """Valida y crea una categoría."""
+    def crearNuevaCategoria(self, id_empleado, nombre, descripcion): 
+        """Valida y crea una categoría, registrando el log"""
         if not nombre or len(nombre.strip()) == 0:
-            log.warning("No se introdujo nombre de categoria")
-            return False, "El nombre de la categoría es obligatorio"
+            return False, "Nombre obligatorio."
         
         try:
             exito = self.inv_queries.crearCategoria(nombre.strip(), descripcion)
             if exito:
+                # --- AUDITORÍA ---
+                self.usr_queries.registrarLog(
+                    id_empleado, 
+                    "CREAR CATEGORIA", 
+                    f"Nueva categoría: {nombre}"
+                )
                 log.info(f"Nueva categoría creada: '{nombre}'")
                 return True, "Categoría creada exitosamente."
             else:
@@ -30,7 +38,7 @@ class ProductController:
             log.error(f"Excepción al crear categoría '{nombre}': {e}")
             return False, f"Error del sistema: {e}"
 
-    def registrarProductoNuevo(self, id_categoria, descripcion, precio, lista_variantes):
+    def registrarProductoNuevo(self, id_empleado,id_categoria, descripcion, precio, lista_variantes):
         """
         Registra un producto completo con sus variantes iniciales de forma atómica.
         Si falla cualquier parte del proceso, no se guarda nada en la BD.
@@ -86,6 +94,13 @@ class ProductController:
             
             if contador_variantes == 0:
                  raise Exception("No se registraron variantes válidas (revise el stock)")
+
+            self.usr_queries.registrarLog(
+                id_empleado=id_empleado,
+                accion="ALTA PRODUCTO",
+                descripcion=f"Producto '{descripcion}' creado con {len(lista_variantes)} variantes.",
+                conexion_externa=conn
+            )
 
             # Guardamos cambios.
             conn.commit()
@@ -152,4 +167,81 @@ class ProductController:
         if exito:
             log.info(f"Oferta del {porc}% agregada al producto ID {id_producto}.")
             return True, f"Oferta del {porc}% registrada correctamente."
-        return False, "Error al guardar la oferta."
+        return False, "Error al guardar la oferta." 
+    
+    def registrarProveedor(self, id_empleado, nombre, contacto):
+        """
+        Registra un nuevo proveedor en el sistema.
+        """
+        if not nombre or len(nombre.strip()) == 0:
+            return False, "El nombre del proveedor es obligatorio."
+
+        try:
+            # 1. Intentamos crear el proveedor
+            id_prov = self.prov_queries.registrarProveedor(nombre.strip(), contacto)
+            
+            if id_prov:
+                # 2. Auditoría
+                self.usr_queries.registrarLog(
+                    id_empleado,
+                    "ALTA PROVEEDOR",
+                    f"Nuevo proveedor registrado: '{nombre}'."
+                )
+                log.info(f"Proveedor registrado: {nombre} (ID: {id_prov})")
+                return True, f"Proveedor '{nombre}' registrado correctamente."
+            else:
+                log.error(f"Error al registrar proveedor '{nombre}'.")
+                return False, "Error al guardar el proveedor."
+
+        except Exception as e:
+            log.error(f"Excepción en registrarProveedor: {e}")
+            return False, f"Error del sistema: {e}"
+
+    def obtenerListaProveedores(self):
+        """
+        Retorna la lista de todos los proveedores para mostrarlos en la UI.
+        """
+        try:
+            return self.prov_queries.obtenerProveedores()
+        except Exception as e:
+            log.error(f"Error al obtener lista de proveedores: {e}")
+            return []
+
+    def vincularProductoAProveedor(self, id_empleado, id_proveedor, id_producto):
+        """
+        Asocia un producto existente a un proveedor para reposición.
+        """
+        try:
+            # Validamos que ambos IDs existan (básico)
+            if not id_proveedor or not id_producto:
+                return False, "Datos incompletos para la vinculación."
+
+            exito = self.prov_queries.asociarProductoProveedor(id_proveedor, id_producto)
+            
+            if exito:
+                # Auditoría
+                self.usr_queries.registrarLog(
+                    id_empleado,
+                    "VINCULAR PROVEEDOR",
+                    f"Se asoció el proveedor ID {id_proveedor} al producto ID {id_producto}."
+                )
+                log.info(f"Vínculo creado: Prov {id_proveedor} -> Prod {id_producto}")
+                return True, "Producto asociado al proveedor correctamente."
+            else:
+                # Esto pasa si ya estaba vinculado (Primary Key compuesta duplicada)
+                log.warning(f"Intento duplicado de vincular Prov {id_proveedor} con Prod {id_producto}")
+                return False, "Este producto ya está asociado a ese proveedor."
+
+        except Exception as e:
+            log.error(f"Error al vincular proveedor: {e}")
+            return False, f"Error del sistema: {e}"
+
+    def obtenerProveedoresDeProducto(self, id_producto):
+        """
+        Obtiene qué proveedores surten un producto específico (para reportes o reposición).
+        """
+        try:
+            return self.prov_queries.obtenerProveedoresDeProducto(id_producto)
+        except Exception as e:
+            log.error(f"Error al obtener proveedores del producto {id_producto}: {e}")
+            return []

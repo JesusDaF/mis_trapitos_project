@@ -1,3 +1,5 @@
+## Administrador de la base de datos
+
 import os
 import psycopg2
 from psycopg2 import Error

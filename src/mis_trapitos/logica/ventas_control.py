@@ -1,4 +1,6 @@
-from mis_trapitos.database_conexion.queries import VentasQueries, InventarioQueries, DescuentosQueries
+## Controlador de ventas
+
+from mis_trapitos.database_conexion.queries import VentasQueries, InventarioQueries, DescuentosQueries, UsuariosQueries
 from mis_trapitos.core.logger import log
 
 class SalesController:
@@ -11,6 +13,7 @@ class SalesController:
     def __init__(self):
         """Inicializa las consultas de ventas"""
         self.ventas_queries = VentasQueries()
+        self.user_queries = UsuariosQueries()
 
     def calcularTotal(self, carrito_compras):
         """
@@ -119,6 +122,14 @@ class SalesController:
                 )
                 if not exito_stock:
                     raise Exception(f"Stock insuficiente para variante {det['id_variante']}")
+            
+            # --- 3. AUDITORÍA EN BD ---
+            self.user_queries.registrarLog(
+                id_empleado=id_empleado,
+                accion="VENTA",
+                descripcion=f"Venta ID {id_venta} registrada. Total: ${total_venta_acumulado:.2f}",
+                conexion_externa=conn  # Usamos la misma conexión
+            )
 
             conn.commit()
             log.info(f"Venta finalizada exitosamente. ID: {id_venta}")
