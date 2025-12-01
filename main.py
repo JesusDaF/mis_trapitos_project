@@ -12,10 +12,10 @@ def configurarEntorno():
     if ruta_src not in sys.path:
         sys.path.insert(0, ruta_src)
 
-# Ejecutamos la configuración antes de importar nada de 'mis_trapitos'
+# Ejecutamos la configuración antes de importar 
 configurarEntorno()
 
-# Ahora podemos importar nuestra aplicación
+# Ahora a importar la aplicación
 from mis_trapitos.app import MisTrapitosApp
 
 if __name__ == "__main__":
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     app = MisTrapitosApp()
     
     # Arrancamos el sistema
-    # (Si la BD falló en el __init__, la ventana no se abrirá)
+    
     try:
         if hasattr(app, 'root'): # Verificamos que se haya creado correctamente
             app.iniciarAplicacion()

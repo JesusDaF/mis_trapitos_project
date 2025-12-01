@@ -60,7 +60,7 @@ class InventarioQueries:
     def obtenerProductosEnInventario(self, conexion_externa=None):
         """Obtiene inventario. Soporta conexión externa (ej. lectura consistente)."""
         sql_inventario = """
-            SELECT p.descripcion, v.talla, v.color, v.stock_disponible, p.precio_base
+            SELECT p.id_producto, p.descripcion, v.talla, v.color, v.stock_disponible, p.precio_base
             FROM Variantes_Producto v
             JOIN Productos p ON v.id_producto = p.id_producto
         """
@@ -102,6 +102,10 @@ class ClientesQueries:
             ORDER BY v.fecha_venta DESC
         """
         return self.db.obtenerDatos(sql, (id_cliente,), conexion_externa)
+    def obtenerTodosLosClientes(self, conexion_externa=None):
+        """Devuelve la lista completa de clientes para el directorio."""
+        sql = "SELECT id_cliente, nombre_completo, telefono, correo_electronico, direccion FROM Clientes ORDER BY nombre_completo ASC"
+        return self.db.obtenerDatos(sql, conexion_externa=conexion_externa)
 
 
 class VentasQueries:
@@ -214,6 +218,12 @@ class UsuariosQueries:
         if resultado:
             return resultado[0]
         return None 
+    
+    def obtenerTodosLosUsuarios(self, conexion_externa=None):
+        """Devuelve la lista de empleados para la gestión administrativa."""
+        #Sin contraseña por seguridad
+        sql = "SELECT id_empleado, nombre_completo, usuario, rol, activo FROM Empleados ORDER BY id_empleado ASC"
+        return self.db.obtenerDatos(sql, conexion_externa=conexion_externa)
     
 
 class ProveedoresQueries:

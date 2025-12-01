@@ -63,7 +63,7 @@ class ReportQueries:
             WHERE v.fecha_venta >= CURRENT_DATE - INTERVAL '30 days'
             GROUP BY p.id_producto, p.descripcion
             ORDER BY total_vendido DESC
-            LIMIT 5
+            LIMIT 10
         """
         return self.db.obtenerDatos(sql)
 

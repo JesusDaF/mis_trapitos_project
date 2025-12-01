@@ -106,3 +106,11 @@ class AuthController:
         except Exception as e:
             log.error(f"Excepción al registrar empleado '{usuario}': {e}")
             return False, f"Error del sistema: {e}"
+    # METODO PUENTE    
+    def obtenerListaEmpleados(self):
+        """Retorna todos los usuarios registrados."""
+        try:
+            return self.queries.obtenerTodosLosUsuarios()
+        except Exception as e:
+            log.error(f"Error al listar empleados: {e}")
+            return []

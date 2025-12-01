@@ -46,13 +46,30 @@ class InventoryView(tk.Frame):
         )
         btn_refresh.pack(side="left", padx=5)
 
+        tk.Button(
+            frame_toolbar, 
+            text="🔗 Asignar Proveedor", 
+            bg="#F39C12", fg="white", font=("Segoe UI", 10, "bold"),
+            command=self._abrirModalVincular
+        ).pack(side="left", padx=5)
+
+        tk.Button(
+            frame_toolbar, 
+            text=" Ver Proveedores", 
+            bg="#8E44AD", fg="white", font=("Segoe UI", 10, "bold"), 
+            command=self._abrirModalVerProveedores
+        ).pack(side="left", padx=5)
+
         # --- 2. TABLA DE DATOS (Treeview) ---
         frame_tabla = tk.Frame(self)
         frame_tabla.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Definición de columnas
-        columnas = ("producto", "talla", "color", "stock", "precio")
+        columnas = ("id", "producto", "talla", "color", "stock", "precio") 
         self.tree = ttk.Treeview(frame_tabla, columns=columnas, show="headings")
+        # ID 
+        self.tree.heading("id", text="ID")
+        self.tree.column("id", width=40, anchor="center")
         
         # Encabezados
         self.tree.heading("producto", text="Descripción Producto")
@@ -76,13 +93,9 @@ class InventoryView(tk.Frame):
         scrollbar.pack(side="right", fill="y")
 
     def cargarDatosTabla(self):
-        """Solicita el catálogo al controlador y llena la tabla"""
-        # 1. Limpiar tabla actual
         for item in self.tree.get_children():
             self.tree.delete(item)
             
-        # 2. Obtener datos
-        # datos = [(descripcion, talla, color, stock, precio), ...]
         datos = self.controller.obtenerCatalogo()
         
         # 3. Llenar filas
@@ -93,13 +106,39 @@ class InventoryView(tk.Frame):
             
             self.tree.insert("", "end", values=fila_visual)
 
-    # --- LÓGICA DEL FORMULARIO DE ALTA ---
+    # LÓGICA DEL FORMULARIO DE ALTA 
+    def _abrirModalVincular(self):
+        """Abre el modal para relacionar un producto con un proveedor"""
+        seleccion = self.tree.selection()
+        if not seleccion:
+            messagebox.showwarning("Atención", "Seleccione un producto de la tabla primero.")
+            return
+
+        # Obtenemos datos del producto seleccionado
+        item_id = self.tree.item(seleccion[0])['values'][0] # ID Producto
+        desc_prod = self.tree.item(seleccion[0])['values'][1] # Descripción
+        
+        VentanaVincularProveedor(self, item_id, desc_prod)
 
     def _abrirModalNuevoProducto(self):
         """Abre una ventana emergente para registrar productos"""
         VentanaAltaProducto(self)
 
-# --- CLASE AUXILIAR: VENTANA MODAL DE REGISTRO ---
+    def _abrirModalVerProveedores(self):
+        """Abre una ventana que lista los proveedores del producto seleccionado"""
+        seleccion = self.tree.selection()
+        if not seleccion:
+            messagebox.showwarning("Atención", "Seleccione un producto para ver sus proveedores.")
+            return
+
+        # Obtenemos el ID del producto (recuerda que ya configuramos la columna ID oculta/visible)
+        item_data = self.tree.item(seleccion[0])['values']
+        id_producto = item_data[0] 
+        nombre_producto = item_data[1]
+        
+        VentanaListaProveedores(self, id_producto, nombre_producto)
+
+# CLASE AUXILIAR: VENTANA MODAL DE REGISTRO
 class VentanaAltaProducto(Toplevel):
     """Sub-ventana para el formulario de alta de producto"""
     
@@ -176,10 +215,6 @@ class VentanaAltaProducto(Toplevel):
         ctrl = self.view.controller 
         
         # A. Crear Categoría
-        # Intentamos crearla. Si ya existe, no pasa nada grave, el controlador lo maneja.
-        # Necesitamos el ID de la categoría. Como nuestra función crearNuevaCategoria
-        # devuelve True/False, haremos una pequeña trampa buscando todas las categorías
-        # para encontrar el ID de la que escribimos.
         
         ctrl.crearNuevaCategoria(id_empleado, cat_nombre, "General")
         
@@ -207,3 +242,116 @@ class VentanaAltaProducto(Toplevel):
             self.destroy() # Cerrar ventana modal
         else:
             messagebox.showerror("Error", msg)
+
+class VentanaVincularProveedor(Toplevel):
+    """Sub-ventana para vincular proveedores y productos"""
+    def __init__(self, parent_view, id_producto, nombre_producto):
+        super().__init__(parent_view)
+        self.view = parent_view
+        self.id_producto = id_producto
+        self.title("Asignar Proveedor")
+        self.geometry("400x250")
+        self.configure(bg="white")
+        self.transient(parent_view)
+        self.grab_set()
+        
+        self.lista_provs = [] # Para guardar (id, nombre)
+        self._construirFormulario(nombre_producto)
+
+    def _construirFormulario(self, nombre_producto):
+        tk.Label(self, text="Vincular Proveedor", font=("Segoe UI", 12, "bold"), bg="white").pack(pady=10)
+        tk.Label(self, text=f"Producto: {nombre_producto}", bg="white", fg="gray").pack()
+
+        tk.Label(self, text="Seleccione Proveedor:", bg="white").pack(anchor="w", padx=20, pady=(20, 5))
+        
+        # Obtener lista de proveedores del controlador
+        raw_provs = self.view.controller.obtenerListaProveedores()
+        # raw_provs = [(id, nombre, contacto), ...]
+        self.lista_provs = raw_provs
+        nombres = [f"{p[1]} (ID: {p[0]})" for p in raw_provs]
+        
+        self.combo_prov = ttk.Combobox(self, values=nombres, state="readonly", width=40)
+        self.combo_prov.pack(padx=20)
+
+        tk.Button(
+            self, text="VINCULAR", 
+            bg="#F39C12", fg="white", font=("Segoe UI", 10, "bold"),
+            pady=10, command=self._guardar
+        ).pack(fill="x", padx=40, pady=30)
+
+    def _guardar(self):
+        idx = self.combo_prov.current()
+        if idx == -1:
+            messagebox.showwarning("Error", "Seleccione un proveedor.")
+            return
+            
+        id_proveedor = self.lista_provs[idx][0]
+        
+        # Llamamos al controlador
+        exito, msg = self.view.controller.vincularProductoAProveedor(
+            self.view.usuario['id'],
+            id_proveedor,
+            self.id_producto
+        )
+        
+        if exito:
+            messagebox.showinfo("Éxito", msg)
+            self.destroy()
+        else:
+            messagebox.showerror("Error", msg)
+    
+class VentanaListaProveedores(Toplevel):
+    """
+    Popup que muestra la relación N:M (Qué proveedores surten este producto).
+    """
+    def __init__(self, parent_view, id_producto, nombre_producto):
+        super().__init__(parent_view)
+        self.view = parent_view
+        self.title(f"Proveedores de: {nombre_producto}")
+        self.geometry("500x300")
+        self.configure(bg="white")
+        
+        # UI Limpia
+        tk.Label(
+            self, 
+            text=f"Proveedores Asociados a:\n{nombre_producto}", 
+            font=("Segoe UI", 12, "bold"), 
+            bg="white", fg="#2C3E50"
+        ).pack(pady=10)
+
+        # Tabla de Proveedores
+        frame_tabla = tk.Frame(self, bg="white", padx=10, pady=10)
+        frame_tabla.pack(fill="both", expand=True)
+
+        cols = ("empresa", "contacto")
+        self.tree = ttk.Treeview(frame_tabla, columns=cols, show="headings")
+        
+        self.tree.heading("empresa", text="Empresa / Proveedor")
+        self.tree.heading("contacto", text="Datos de Contacto")
+        
+        self.tree.column("empresa", width=200)
+        self.tree.column("contacto", width=250)
+        
+        self.tree.pack(fill="both", expand=True)
+        
+        # Botón Cerrar
+        tk.Button(
+            self, text="Cerrar", command=self.destroy,
+            bg="#95A5A6", fg="white"
+        ).pack(pady=10)
+
+        self._cargarDatos(id_producto)
+
+    def _cargarDatos(self, id_producto):
+        """Consulta al controlador quiénes son los proveedores"""
+        # Usamos el método que ya existe en ProductController
+        lista = self.view.controller.obtenerProveedoresDeProducto(id_producto)
+        
+        if not lista:
+            # Si la lista está vacía, mostramos un aviso en la tabla
+            self.tree.insert("", "end", values=("(Sin proveedores asignados)", "-"))
+        else:
+            for prov in lista:
+                # prov = (id, nombre, contacto) -> Ajustamos según lo que retorne tu query
+                # Asumiendo que retorna (id, nombre, contacto)
+                self.tree.insert("", "end", values=(prov[1], prov[2]))

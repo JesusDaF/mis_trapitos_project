@@ -89,3 +89,11 @@ class CustomerController:
         except Exception as e:
             log.error(f"Error obteniendo historial de cliente {id_cliente}: {e}")
             return []
+    
+    def obtenerListaClientes(self):
+        """Retorna todos los clientes registrados."""
+        try:
+            return self.client_queries.obtenerTodosLosClientes()
+        except Exception as e:
+            log.error(f"Error al listar clientes: {e}")
+            return []

@@ -5,6 +5,10 @@ from mis_trapitos.core.logger import log
 #Importar vistas 
 from mis_trapitos.ui.inventario_view import InventoryView
 from mis_trapitos.ui.ventas_view import SalesView
+from mis_trapitos.ui.clientes_view import CustomersView
+from mis_trapitos.ui.reportes_view import ReportsView
+from mis_trapitos.ui.usuarios_view import UsersView
+from mis_trapitos.ui.proveedores_view import SuppliersView
 
 class MainWindow(tk.Frame):
     """
@@ -110,26 +114,30 @@ class MainWindow(tk.Frame):
         """
         # 1. Limpiar contenido actual
         for widget in self.frame_contenido.winfo_children():
-            widget.destroy() # O .pack_forget() si queremos cachear vistas
+            widget.destroy() 
         
         # 2. Cargar la nueva vista
-        # Aquí importamos las clases de las vistas a medida que las creemos
+        # Aquí importamos las clases de las vistas
         frame_nuevo = None
         
         if clave_vista == "Ventas":
             frame_nuevo = SalesView(self.frame_contenido, self.usuario)
-            
-            
+             
         elif clave_vista == "Inventario":
-            # Si ya tenemos la vista instanciada, la mostramos (opcional), 
-            # o creamos una nueva instancia fresca.
             frame_nuevo = InventoryView(self.frame_contenido, self.usuario)
 
         elif clave_vista == "Reportes":
-             # frame_nuevo = ReportsView(self.frame_contenido)
-             tk.Label(self.frame_contenido, text="Vista de Reportes (Solo Admin)").pack()
+            frame_nuevo = ReportsView(self.frame_contenido)
+             
 
-        # ... Agregar resto de if/elif para las otras vistas
+        elif clave_vista == "Clientes":
+            frame_nuevo = CustomersView(self.frame_contenido, self.usuario)
+
+        elif clave_vista == "Usuarios":
+            frame_nuevo = UsersView(self.frame_contenido, self.usuario) 
+
+        elif clave_vista == "Proveedores":
+            frame_nuevo = SuppliersView(self.frame_contenido, self.usuario)
 
         if frame_nuevo:
             frame_nuevo.pack(fill="both", expand=True)
