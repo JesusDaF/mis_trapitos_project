@@ -3,84 +3,85 @@ from tkinter import messagebox
 from mis_trapitos.core.logger import log
 from mis_trapitos.database_conexion.db_manager import DBManager
 
+# Importamos las vistas
+from mis_trapitos.ui.login_view import LoginView
+from mis_trapitos.ui.main_window import MainWindow 
+
+
 class MisTrapitosApp:
     """
-    Clase principal que inicializa la aplicación gráfica (GUI) y el entorno.
-    Actúa como el contenedor raíz (Root) de Tkinter.
+    Clase principal que inicializa la aplicación gráfica.
+    Gestiona el ciclo de vida: Login <-> Ventana Principal.
     """
 
     def __init__(self):
         """Configura la ventana base y verifica dependencias"""
-        # 1. Inicializamos el sistema de logs (Ya se hace al importar, pero registramos el inicio)
         log.info("--- Iniciando sistema Mis Trapitos ---")
 
-        # 2. Configuración de la Ventana Principal (Root)
+        # Configuración Root
         self.root = tk.Tk()
         self.root.title("Mis Trapitos - Gestión de Tienda")
-        # Definimos un tamaño por defecto (Ancho x Alto)
         self.root.geometry("1024x768")
-        # Color de fondo base (opcional)
-        self.root.configure(bg="#f0f0f0")
-
-        # 3. Verificación de Salud del Sistema (Base de Datos)
+        self.root.state('zoomed') # Iniciar maximizado (funciona en Windows)
+        
+        # Verificación BD
         if not self._verificarConexionBaseDatos():
-            # Si falla la BD, mostramos error y cerramos, no tiene caso seguir.
             self.root.destroy()
             return
 
-        # 4. Configurar protocolo de cierre
         self.root.protocol("WM_DELETE_WINDOW", self.cerrarAplicacion)
+        
+        # Variable para almacenar la vista actual
+        self.vista_actual = None
 
-        # AQUI INICIALIZAREMOS LAS VISTAS (LOGIN / MAIN) MÁS ADELANTE
-        # Por ahora, dejamos un placeholder visual
-        self._cargarVistaInicial()
+        # Iniciamos mostrando el Login
+        self.mostrarLogin()
 
     def _verificarConexionBaseDatos(self):
-        """
-        Método privado para asegurar que PostgreSQL responde antes de abrir la ventana.
-        """
         db = DBManager()
         conn = db.obtenerConexion()
-        
         if conn:
-            log.info("Verificación de inicio: Conexión a BD exitosa.")
             db.cerrarConexion(conn)
             return True
         else:
-            log.critical("Verificación de inicio: FALLO conexión a BD.")
-            messagebox.showerror(
-                "Error Crítico", 
-                "No se pudo conectar a la base de datos local.\n\n"
-                "Verifique que PostgreSQL esté ejecutándose y que el archivo .env sea correcto."
-            )
+            log.critical("Fallo conexión inicial BD")
+            messagebox.showerror("Error Crítico", "No se pudo conectar a la base de datos.")
             return False
 
-    def _cargarVistaInicial(self):
-        """
-        Determina qué pantalla mostrar al arrancar
-        Aquí se mostrará el Login, pero por ahora mostramos un mensaje de bienvenida
-        """
-        # Etiqueta temporal para verificar que la app corre
-        label_bienvenida = tk.Label(
-            self.root, 
-            text="Sistema Mis Trapitos\nListo para cargar interfaces", 
-            font=("Arial", 20),
-            bg="#f0f0f0",
-            fg="#333"
-        )
-        label_bienvenida.pack(expand=True)
+    def mostrarLogin(self):
+        """Destruye la vista actual y carga el Login"""
+        if self.vista_actual:
+            self.vista_actual.destroy()
+        
+        self.root.title("Mis Trapitos - Acceso")
+        # Instanciamos la vista de Login y le pasamos la función para cuando tenga éxito
+        self.vista_actual = LoginView(self.root, self.alIngresarCorrectamente)
+
+    def mostrarMenuPrincipal(self, usuario_data):
+        """Destruye el Login y carga el Dashboard Principal"""
+        if self.vista_actual:
+            self.vista_actual.destroy()
+            
+        self.root.title(f"Mis Trapitos - Sesión de: {usuario_data['nombre']}")
+        
+        # Instanciamos la ventana principal
+        # Le pasamos los datos del usuario y la función para cerrar sesión
+        self.vista_actual = MainWindow(self.root, usuario_data, self.alCerrarSesion)
+
+    # --- CALLBACKS (Puentes entre vistas) ---
+
+    def alIngresarCorrectamente(self, datos_usuario):
+        """Se ejecuta cuando el LoginView valida al usuario"""
+        self.mostrarMenuPrincipal(datos_usuario)
+
+    def alCerrarSesion(self):
+        """Se ejecuta cuando el usuario presiona 'Salir' en MainWindow"""
+        self.mostrarLogin()
 
     def iniciarAplicacion(self):
-        """Arranca el bucle principal de la interfaz gráfica (Main Loop)"""
         if self.root:
-            try:
-                log.info("Interfaz gráfica mostrada al usuario.")
-                self.root.mainloop()
-            except Exception as e:
-                log.error(f"Error fatal en la interfaz gráfica: {e}")
+            self.root.mainloop()
 
     def cerrarAplicacion(self):
-        """Maneja el cierre ordenado del software"""
         if messagebox.askokcancel("Salir", "¿Desea cerrar el sistema?"):
-            log.info("--- Sistema cerrado por el usuario ---")
             self.root.destroy()
