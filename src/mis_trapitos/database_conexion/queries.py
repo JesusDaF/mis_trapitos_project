@@ -58,13 +58,36 @@ class InventarioQueries:
         )
 
     def obtenerProductosEnInventario(self, conexion_externa=None):
-        """Obtiene inventario. Soporta conexión externa (ej. lectura consistente)."""
+        """
+        Obtiene inventario incluyendo el ID.
+        CAMBIO: Solo trae productos donde activo = TRUE.
+        """
         sql_inventario = """
-            SELECT p.id_producto, p.descripcion, v.talla, v.color, v.stock_disponible, p.precio_base
+            SELECT v.id_variante, p.id_producto, p.descripcion, v.talla, v.color, v.stock_disponible, p.precio_base
             FROM Variantes_Producto v
             JOIN Productos p ON v.id_producto = p.id_producto
+            WHERE p.activo = TRUE 
+            ORDER BY p.id_producto DESC
         """
         return self.db.obtenerDatos(sql_inventario, conexion_externa=conexion_externa)
+    
+    def actualizarStock(self, id_variante, nuevo_stock, conexion_externa=None):
+        """Sobrescribe el stock de una variante específica."""
+        sql = "UPDATE Variantes_Producto SET stock_disponible = %s WHERE id_variante = %s"
+        return self.db.ejecutarConsulta(sql, (nuevo_stock, id_variante), conexion_externa)
+
+    def actualizarPrecioProducto(self, id_producto, nuevo_precio, conexion_externa=None):
+        """Actualiza el precio base del producto padre."""
+        sql = "UPDATE Productos SET precio_base = %s WHERE id_producto = %s"
+        return self.db.ejecutarConsulta(sql, (nuevo_precio, id_producto), conexion_externa)
+    
+    def eliminarProducto(self, id_producto, conexion_externa=None):
+        """
+        Realiza una BAJA LÓGICA. 
+        No borra el registro, solo lo marca como inactivo para ocultarlo.
+        """
+        sql = "UPDATE Productos SET activo = FALSE WHERE id_producto = %s"
+        return self.db.ejecutarConsulta(sql, (id_producto,), conexion_externa)
 
 class ClientesQueries:
     """Maneja las operaciones de base de datos relacionadas con los clientes"""
@@ -88,7 +111,7 @@ class ClientesQueries:
         return None
 
     def buscarClientePorTelefono(self, telefono, conexion_externa=None):
-        sql = "SELECT id_cliente, nombre_completo, direccion FROM Clientes WHERE telefono = %s"
+        sql = "SELECT id_cliente, nombre_completo, direccion FROM Clientes WHERE activo = TRUE AND telefono = %s"
         resultado = self.db.obtenerDatos(sql, (telefono,), conexion_externa)
         return resultado[0] if resultado else None
     
@@ -103,9 +126,14 @@ class ClientesQueries:
         """
         return self.db.obtenerDatos(sql, (id_cliente,), conexion_externa)
     def obtenerTodosLosClientes(self, conexion_externa=None):
-        """Devuelve la lista completa de clientes para el directorio."""
-        sql = "SELECT id_cliente, nombre_completo, telefono, correo_electronico, direccion FROM Clientes ORDER BY nombre_completo ASC"
+        """Trae solo clientes activos."""
+        sql = "SELECT id_cliente, nombre_completo, telefono, correo_electronico, direccion FROM Clientes WHERE activo = TRUE ORDER BY nombre_completo ASC"
         return self.db.obtenerDatos(sql, conexion_externa=conexion_externa)
+    
+    def eliminarCliente(self, id_cliente, conexion_externa=None):
+        """Baja Lógica: Marca como inactivo."""
+        sql = "UPDATE Clientes SET activo = FALSE WHERE id_cliente = %s"
+        return self.db.ejecutarConsulta(sql, (id_cliente,), conexion_externa)
 
 
 class VentasQueries:
@@ -220,10 +248,14 @@ class UsuariosQueries:
         return None 
     
     def obtenerTodosLosUsuarios(self, conexion_externa=None):
-        """Devuelve la lista de empleados para la gestión administrativa."""
-        #Sin contraseña por seguridad
-        sql = "SELECT id_empleado, nombre_completo, usuario, rol, activo FROM Empleados ORDER BY id_empleado ASC"
+        """Trae solo empleados activos."""
+        sql = "SELECT id_empleado, nombre_completo, usuario, rol, activo FROM Empleados WHERE activo = TRUE ORDER BY id_empleado ASC"
         return self.db.obtenerDatos(sql, conexion_externa=conexion_externa)
+    
+    def eliminarUsuario(self, id_empleado, conexion_externa=None):
+        """Baja Lógica."""
+        sql = "UPDATE Empleados SET activo = FALSE WHERE id_empleado = %s"
+        return self.db.ejecutarConsulta(sql, (id_empleado,), conexion_externa)
     
 
 class ProveedoresQueries:
@@ -253,10 +285,8 @@ class ProveedoresQueries:
         return None
 
     def obtenerProveedores(self, conexion_externa=None):
-        """
-        Obtiene la lista completa de proveedores registrados.
-        """
-        sql = "SELECT id_proveedor, nombre_proveedor, datos_contacto FROM Proveedores"
+        """Trae solo proveedores activos."""
+        sql = "SELECT id_proveedor, nombre_proveedor, datos_contacto FROM Proveedores WHERE activo = TRUE"
         return self.db.obtenerDatos(sql, conexion_externa=conexion_externa)
 
     def asociarProductoProveedor(self, id_proveedor, id_producto, conexion_externa=None):
@@ -285,7 +315,12 @@ class ProveedoresQueries:
             JOIN Proveedores_Productos pp ON p.id_proveedor = pp.id_proveedor
             WHERE pp.id_producto = %s
         """
-        return self.db.obtenerDatos(sql, (id_producto,), conexion_externa) 
+        return self.db.obtenerDatos(sql, (id_producto,), conexion_externa)
+    
+    def eliminarProveedor(self, id_proveedor, conexion_externa=None):
+        """Baja Lógica."""
+        sql = "UPDATE Proveedores SET activo = FALSE WHERE id_proveedor = %s"
+        return self.db.ejecutarConsulta(sql, (id_proveedor,), conexion_externa)
     
 class DescuentosQueries:
     """

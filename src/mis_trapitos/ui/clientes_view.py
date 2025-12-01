@@ -39,6 +39,11 @@ class CustomersView(tk.Frame):
             command=self.cargarDatosTabla
         ).pack(side="left", padx=5)
 
+        tk.Button(
+            frame_toolbar, text="🗑️ Eliminar", bg="#C0392B", fg="white", font=("Segoe UI", 10),
+            command=self._accionEliminar
+        ).pack(side="left", padx=5)
+
         # TABLA DE DATOS 
         frame_tabla = tk.Frame(self)
         frame_tabla.pack(fill="both", expand=True, padx=10, pady=10)
@@ -92,6 +97,22 @@ class CustomersView(tk.Frame):
         historial = self.controller.obtenerHistorialCompras(id_cliente)
         
         VentanaHistorial(self, nombre_cliente, historial)
+
+    def _accionEliminar(self):
+        seleccion = self.tree.selection()
+        if not seleccion: return
+        
+        if not messagebox.askyesno("Confirmar", "¿Eliminar este cliente de la base de datos?"): return
+
+        id_cliente = self.tree.item(seleccion[0])['values'][0]
+        
+        exito, msg = self.controller.eliminarCliente(self.usuario['id'], id_cliente)
+        
+        if exito:
+            messagebox.showinfo("Éxito", msg)
+            self.cargarDatosTabla()
+        else:
+            messagebox.showerror("Error", msg)
 
 # VENTANA MODAL: ALTA CLIENTE
 class VentanaAltaCliente(Toplevel):

@@ -151,3 +151,15 @@ class SalesController:
             
         finally:
             self.ventas_queries.db.cerrarConexion(conn)
+
+    def obtenerDescuentoAutomatico(self, id_variante):
+        """
+        Consulta si existe una oferta vigente para mostrarla en el carrito.
+        """
+        try:
+            desc_queries = DescuentosQueries()
+            return desc_queries.obtenerDescuentoActivo(id_variante)
+        except Exception as e:
+            log.error(f"Error consultando descuento: {e}")
+            return 0.0
+    

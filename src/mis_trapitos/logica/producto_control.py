@@ -244,4 +244,76 @@ class ProductController:
             return self.prov_queries.obtenerProveedoresDeProducto(id_producto)
         except Exception as e:
             log.error(f"Error al obtener proveedores del producto {id_producto}: {e}")
-            return []
+            return [] 
+        
+    def actualizarProductoExistente(self, id_empleado, id_producto, id_variante, nuevo_precio, nuevo_stock):
+        """
+        Permite cambiar el precio (del producto padre) y el stock (de la variante seleccionada).
+        """
+        try:
+            p_float = float(nuevo_precio)
+            s_int = int(nuevo_stock)
+            
+            if p_float <= 0: return False, "El precio debe ser mayor a 0."
+            if s_int < 0: return False, "El stock no puede ser negativo."
+            
+            # Transacción
+            conn = self.inv_queries.db.obtenerConexion()
+            if not conn: return False, "Error de conexión."
+            
+            try:
+                # 1. Actualizar Precio (Afecta al producto padre)
+                self.inv_queries.actualizarPrecioProducto(id_producto, p_float, conexion_externa=conn)
+                
+                # 2. Actualizar Stock (Afecta a la variante)
+                self.inv_queries.actualizarStock(id_variante, s_int, conexion_externa=conn)
+                
+                # 3. Auditoría
+                self.usr_queries.registrarLog(
+                    id_empleado, "EDICION PRODUCTO", 
+                    f"Actualización Prod ID {id_producto}/Var {id_variante}: Precio ${p_float}, Stock {s_int}",
+                    conexion_externa=conn
+                )
+                
+                conn.commit()
+                log.info(f"Producto actualizado ID {id_producto}.")
+                return True, "Producto actualizado correctamente."
+                
+            except Exception as e:
+                conn.rollback()
+                log.error(f"Error actualizando producto: {e}")
+                return False, f"Error: {e}"
+            finally:
+                self.inv_queries.db.cerrarConexion(conn)
+
+        except ValueError:
+            return False, "Precio o Stock inválidos."
+        
+    def eliminarProducto(self, id_empleado, id_producto):
+        try:
+            # Ahora esto ejecuta un UPDATE activo=FALSE
+            filas = self.inv_queries.eliminarProducto(id_producto)
+            
+            if filas:
+                self.usr_queries.registrarLog(id_empleado, "BAJA PRODUCTO", f"Se descontinuó el producto ID {id_producto}")
+                log.info(f"Producto ID {id_producto} descontinuado (Soft Delete).")
+                return True, "Producto eliminado correctamente."
+            else:
+                return False, "No se encontró el producto."
+                
+        except Exception as e:
+            log.error(f"Error al eliminar producto: {e}")
+            return False, f"Error del sistema: {e}"
+
+    def eliminarProveedor(self, id_empleado, id_proveedor):
+        try:
+            filas = self.prov_queries.eliminarProveedor(id_proveedor)
+            if filas:
+                self.usr_queries.registrarLog(id_empleado, "BAJA PROVEEDOR", f"Se eliminó el proveedor ID {id_proveedor}")
+                log.info(f"Proveedor ID {id_proveedor} eliminado.")
+                return True, "Proveedor eliminado."
+            else:
+                return False, "No encontrado."
+        except Exception as e:
+            log.error(f"Error al eliminar proveedor: {e}")
+            return False, f"Error: {e}"

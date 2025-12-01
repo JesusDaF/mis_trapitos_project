@@ -37,6 +37,14 @@ class InventoryView(tk.Frame):
         )
         btn_nuevo.pack(side="left", padx=5)
 
+        # Boton de Ofertas
+        tk.Button(
+            frame_toolbar, 
+            text="🏷️Crear Oferta", 
+            bg="#EFD61F", fg="white", font=("Segoe UI", 10, "bold"),
+            command=self._abrirModalOferta
+        ).pack(side="left", padx=5)
+
         # Botón Refrescar
         btn_refresh = tk.Button(
             frame_toolbar, 
@@ -46,13 +54,15 @@ class InventoryView(tk.Frame):
         )
         btn_refresh.pack(side="left", padx=5)
 
+        # BOTON ASIGNAR PROVEEDOR
         tk.Button(
             frame_toolbar, 
             text="🔗 Asignar Proveedor", 
             bg="#F39C12", fg="white", font=("Segoe UI", 10, "bold"),
             command=self._abrirModalVincular
         ).pack(side="left", padx=5)
-
+        
+        # BOTON VISUALIZAR PROVEEDORES
         tk.Button(
             frame_toolbar, 
             text=" Ver Proveedores", 
@@ -60,12 +70,27 @@ class InventoryView(tk.Frame):
             command=self._abrirModalVerProveedores
         ).pack(side="left", padx=5)
 
+        # BOTÓN EDICIÓN
+        tk.Button(
+            frame_toolbar, 
+            text="✏️ Editar / Resurtir", 
+            bg="#2980B9", fg="white", font=("Segoe UI", 10, "bold"),
+            command=self._abrirModalEdicion
+        ).pack(side="left", padx=5)
+
+        # BOTON ELIMINAR
+        tk.Button(
+            frame_toolbar, text="🗑️ Eliminar", 
+            bg="#C0392B", fg="white", font=("Segoe UI", 10, "bold"),
+            command=self._accionEliminar
+        ).pack(side="left", padx=5)
+
         # --- 2. TABLA DE DATOS (Treeview) ---
         frame_tabla = tk.Frame(self)
         frame_tabla.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Definición de columnas
-        columnas = ("id", "producto", "talla", "color", "stock", "precio") 
+        columnas = ("id_var", "id", "producto", "talla", "color", "stock", "precio") 
         self.tree = ttk.Treeview(frame_tabla, columns=columnas, show="headings")
         # ID 
         self.tree.heading("id", text="ID")
@@ -93,16 +118,24 @@ class InventoryView(tk.Frame):
         scrollbar.pack(side="right", fill="y")
 
     def cargarDatosTabla(self):
+        # 1. Limpiar tabla
         for item in self.tree.get_children():
             self.tree.delete(item)
             
+        # 2. Obtener datos 
         datos = self.controller.obtenerCatalogo()
         
-        # 3. Llenar filas
+        # 3. Configurar qué columnas se ven y cuáles se ocultan
+        # Ocultamos "id_var" y "id_prod"
+        self.tree["displaycolumns"] = ("producto", "talla", "color", "stock", "precio")
+        
+        # 4. Llenar filas
         for fila in datos:
-            # Formatear precio con signo de pesos
+            # fila = (id_var, id_prod, desc, talla, color, stock, precio)
             fila_visual = list(fila)
-            fila_visual[4] = f"${fila[4]:.2f}" 
+            
+            # Formatear precio 
+            fila_visual[6] = f"${fila[6]:.2f}" 
             
             self.tree.insert("", "end", values=fila_visual)
 
@@ -123,6 +156,58 @@ class InventoryView(tk.Frame):
     def _abrirModalNuevoProducto(self):
         """Abre una ventana emergente para registrar productos"""
         VentanaAltaProducto(self)
+
+    def _abrirModalOferta(self):
+        seleccion = self.tree.selection()
+        if not seleccion:
+            messagebox.showwarning("Atención", "Seleccione un producto para aplicarle descuento.")
+            return
+
+        # Obtenemos datos del producto seleccionado
+        # Recordando que el query actualizado devuelve:
+        # (id_variante, id_producto, desc, talla, color, stock, precio)
+        valores = self.tree.item(seleccion[0])['values']
+        
+        id_producto = valores[1] # El ID del producto padre
+        nombre_prod = valores[2]
+        
+        VentanaCrearOferta(self, id_producto, nombre_prod)
+
+    def _abrirModalEdicion(self):
+        seleccion = self.tree.selection()
+        if not seleccion:
+            messagebox.showwarning("Atención", "Seleccione un producto para editar.")
+            return
+
+        # Obtenemos datos actuales de la fila seleccionada
+        # values = (id, desc, talla, color, stock, precio_fmt)
+        valores = self.tree.item(seleccion[0])['values']
+        
+        id_prod = valores[0]
+        desc = valores[1]
+        VentanaEdicionProducto(self, valores)
+
+    def _accionEliminar(self):
+        seleccion = self.tree.selection()
+        if not seleccion:
+            messagebox.showwarning("Atención", "Seleccione un producto para eliminar.")
+            return
+
+        # Pedir confirmación
+        if not messagebox.askyesno("Confirmar Eliminación", "⚠️ ¿Está seguro de eliminar este producto?\nSe borrarán todas sus variantes y stock"):
+            return
+
+        # Obtener ID (Recordando el ajuste de columnas: id_var, id_prod...)
+        valores = self.tree.item(seleccion[0])['values']
+        id_producto = valores[1] # ID del producto padre
+
+        exito, msg = self.controller.eliminarProducto(self.usuario['id'], id_producto)
+        
+        if exito:
+            messagebox.showinfo("Éxito", msg)
+            self.cargarDatosTabla()
+        else:
+            messagebox.showerror("Error", msg)
 
     def _abrirModalVerProveedores(self):
         """Abre una ventana que lista los proveedores del producto seleccionado"""
@@ -243,6 +328,71 @@ class VentanaAltaProducto(Toplevel):
         else:
             messagebox.showerror("Error", msg)
 
+from datetime import datetime, timedelta
+
+class VentanaCrearOferta(Toplevel):
+    def __init__(self, parent_view, id_producto, nombre_producto):
+        super().__init__(parent_view)
+        self.view = parent_view
+        self.id_producto = id_producto
+        self.title("Configurar Promoción")
+        self.geometry("350x400")
+        self.configure(bg="white")
+        self.transient(parent_view)
+        self.grab_set()
+
+        self._construirFormulario(nombre_producto)
+
+    def _construirFormulario(self, nombre):
+        tk.Label(self, text="Nueva Oferta / Descuento", font=("Segoe UI", 14, "bold"), bg="white").pack(pady=10)
+        tk.Label(self, text=f"Producto: {nombre}", bg="white", fg="gray").pack()
+
+        frame = tk.Frame(self, bg="white", padx=20, pady=10)
+        frame.pack(fill="both")
+
+        # Campo Porcentaje
+        tk.Label(frame, text="Porcentaje de Descuento (%):", bg="white").pack(anchor="w")
+        self.entry_porc = tk.Entry(frame, font=("Segoe UI", 12))
+        self.entry_porc.pack(fill="x", pady=(0, 15))
+
+        # Fechas (Pre-llenadas para facilitar uso)
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        futuro = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+
+        tk.Label(frame, text="Fecha Inicio (AAAA-MM-DD):", bg="white").pack(anchor="w")
+        self.entry_inicio = tk.Entry(frame, font=("Segoe UI", 12))
+        self.entry_inicio.insert(0, hoy)
+        self.entry_inicio.pack(fill="x", pady=(0, 15))
+
+        tk.Label(frame, text="Fecha Fin (AAAA-MM-DD):", bg="white").pack(anchor="w")
+        self.entry_fin = tk.Entry(frame, font=("Segoe UI", 12))
+        self.entry_fin.insert(0, futuro)
+        self.entry_fin.pack(fill="x", pady=(0, 15))
+        
+        tk.Label(frame, text="* El descuento se aplicará automáticamente en caja.", bg="white", fg="#E67E22", font=("Segoe UI", 8)).pack()
+
+        tk.Button(
+            self, text="ACTIVAR OFERTA", 
+            bg="#E67E22", fg="white", font=("Segoe UI", 10, "bold"),
+            pady=10, command=self._guardar
+        ).pack(fill="x", padx=20, pady=20)
+
+    def _guardar(self):
+        porc = self.entry_porc.get()
+        ini = self.entry_inicio.get()
+        fin = self.entry_fin.get()
+        
+        # Llamamos al ProductController (que ya tiene el método agregarOferta)
+        exito, msg = self.view.controller.agregarOferta(
+            self.id_producto, porc, ini, fin
+        )
+        
+        if exito:
+            messagebox.showinfo("Oferta Creada", msg)
+            self.destroy()
+        else:
+            messagebox.showerror("Error", msg)
+
 class VentanaVincularProveedor(Toplevel):
     """Sub-ventana para vincular proveedores y productos"""
     def __init__(self, parent_view, id_producto, nombre_producto):
@@ -355,3 +505,64 @@ class VentanaListaProveedores(Toplevel):
                 # prov = (id, nombre, contacto) -> Ajustamos según lo que retorne tu query
                 # Asumiendo que retorna (id, nombre, contacto)
                 self.tree.insert("", "end", values=(prov[1], prov[2]))
+
+class VentanaEdicionProducto(Toplevel):
+    """Sub ventana para editar o resurtir entradas de productos en el inventario"""
+    def __init__(self, parent_view, valores_fila):
+        super().__init__(parent_view)
+        self.view = parent_view
+        self.title("Editar Producto / Resurtir")
+        self.geometry("350x400")
+        self.configure(bg="white")
+        
+        # Desempaquetar datos (según el query nuevo)
+        self.id_variante = valores_fila[0]
+        self.id_producto = valores_fila[1]
+        desc = valores_fila[2]
+        talla = valores_fila[3]
+        color = valores_fila[4]
+        stock_actual = valores_fila[5]
+        precio_actual_str = valores_fila[6].replace("$", "")
+
+        tk.Label(self, text="Editar Inventario", font=("Segoe UI", 14, "bold"), bg="white").pack(pady=10)
+        tk.Label(self, text=f"{desc}\n({talla} / {color})", bg="white", fg="gray").pack()
+
+        frame = tk.Frame(self, bg="white", padx=20, pady=20)
+        frame.pack(fill="both")
+
+        # Campo Precio
+        tk.Label(frame, text="Precio Base ($):", bg="white").pack(anchor="w")
+        self.entry_precio = tk.Entry(frame, font=("Segoe UI", 12))
+        self.entry_precio.insert(0, precio_actual_str)
+        self.entry_precio.pack(fill="x", pady=(0, 15))
+
+        # Campo Stock
+        tk.Label(frame, text="Stock Disponible (Resurtir):", bg="white").pack(anchor="w")
+        self.entry_stock = tk.Entry(frame, font=("Segoe UI", 12))
+        self.entry_stock.insert(0, str(stock_actual))
+        self.entry_stock.pack(fill="x", pady=(0, 15))
+
+        tk.Button(
+            self, text="GUARDAR CAMBIOS", 
+            bg="#2980B9", fg="white", font=("Segoe UI", 10, "bold"),
+            pady=10, command=self._guardar
+        ).pack(fill="x", padx=20, pady=10)
+
+    def _guardar(self):
+        nuevo_precio = self.entry_precio.get()
+        nuevo_stock = self.entry_stock.get()
+        
+        exito, msg = self.view.controller.actualizarProductoExistente(
+            self.view.usuario['id'],
+            self.id_producto,
+            self.id_variante,
+            nuevo_precio,
+            nuevo_stock
+        )
+        
+        if exito:
+            messagebox.showinfo("Éxito", msg)
+            self.view.cargarDatosTabla()
+            self.destroy()
+        else:
+            messagebox.showerror("Error", msg)

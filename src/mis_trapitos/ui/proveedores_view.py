@@ -34,6 +34,11 @@ class SuppliersView(tk.Frame):
             command=self.cargarDatosTabla
         ).pack(side="left", padx=5)
 
+        tk.Button(
+            frame_toolbar, text="🗑️ Eliminar", bg="#C0392B", fg="white", font=("Segoe UI", 10),
+            command=self._accionEliminar
+        ).pack(side="left", padx=5)
+
         # --- TABLA DE DATOS ---
         frame_tabla = tk.Frame(self)
         frame_tabla.pack(fill="both", expand=True, padx=10, pady=10)
@@ -70,6 +75,22 @@ class SuppliersView(tk.Frame):
     def _abrirModalNuevo(self):
         VentanaAltaProveedor(self)
 
+    def _accionEliminar(self):
+        seleccion = self.tree.selection()
+        if not seleccion: return
+        
+        if not messagebox.askyesno("Confirmar", "¿Eliminar este proveedor?\nSe desvinculará de los productos asociados"): return
+
+        id_prov = self.tree.item(seleccion[0])['values'][0]
+        
+        exito, msg = self.controller.eliminarProveedor(self.usuario['id'], id_prov)
+        
+        if exito:
+            messagebox.showinfo("Éxito", msg)
+            self.cargarDatosTabla()
+        else:
+            messagebox.showerror("Error", msg)
+
 # VENTANA MODAL: ALTA PROVEEDOR 
 class VentanaAltaProveedor(Toplevel):
     def __init__(self, parent_view):
@@ -102,6 +123,7 @@ class VentanaAltaProveedor(Toplevel):
             bg="#2980B9", fg="white", font=("Segoe UI", 10, "bold"),
             pady=10, command=self._guardar
         ).pack(fill="x", padx=20, pady=20)
+
 
     def _guardar(self):
         nom = self.entry_nom.get().strip()

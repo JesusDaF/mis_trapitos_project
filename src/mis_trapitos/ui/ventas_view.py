@@ -148,45 +148,41 @@ class SalesView(tk.Frame):
     # LÓGICA DE CATÁLOGO
 
     def _cargarCatalogoInicial(self):
-        """Trae todos los productos con stock > 0"""
-        raw_data = self.prod_ctrl.obtenerCatalogo()
-        # raw_data = [(desc, talla, color, stock, precio), ...]
+        """
+        Trae el catálogo usando el controlador, que ya filtra los eliminados.
+        """
+        # 1. Limpiar tabla actual
+        for item in self.tree_prod.get_children():
+            self.tree_prod.delete(item)
+
+        # 2. Obtener datos del controlador (El query actualizado devuelve 7 columnas)
+        # (id_var, id_prod, desc, talla, color, stock, precio)
+        datos = self.prod_ctrl.obtenerCatalogo()
         
-        # Necesitamos el ID variante que está "escondido" en la query original 
-        # (El query actual de obtenerCatalogo no traía ID, vamos a asumir que lo trae o lo ajustamos)
-        # Ajuste rápido: El controlador llama a InventoryQueries.obtenerProductosEnInventario
-        # Esa query necesita retornar el ID para que el carrito funcione.
-        
-        # NOTA: Si InventoryQueries no devuelve el ID, tendremos un problema. 
-        # Asumiremos que InventoryQueries retorna: (desc, talla, color, stock, precio)
-        # PERO necesitamos el ID. 
-        # *Corrección al vuelo*: Usaremos una búsqueda directa aquí o mejoraremos el query en el backend luego.
-        # Por ahora, para no romper el backend, usaremos la lógica de filtrado del Controller si existe,
-        # o confiaremos en que el usuario busca por nombre.
-        
-        # Para que funcione YA, vamos a hacer un truco sucio pero funcional: 
-        # Limpiar tree y llenar solo visualmente. El ID lo buscaremos al seleccionar.
-        # *Mejor opción*: Modificar InventoryQueries para traer el ID. 
-        # (Asumo que lo hicimos o lo haremos, aquí simulo que el index 5 es el ID si modificamos query,
-        # si no, usaremos lógica de coincidencia).
-        
-        # Haremos una consulta directa de IDs para la vista de ventas
-        # Esto es más seguro que adivinar.
-        conn = self.prod_ctrl.inv_queries.db.obtenerConexion()
-        cursor = conn.cursor()
-        cursor.execute("SELECT v.id_variante, p.descripcion, v.talla, v.color, p.precio_base, v.stock_disponible FROM Variantes_Producto v JOIN Productos p ON v.id_producto = p.id_producto WHERE v.stock_disponible > 0")
-        self.data_productos = cursor.fetchall() # Guardamos en memoria
-        conn.close()
-        
+        self.data_productos = datos # Guardamos en memoria para el buscador
+
         self._llenarTablaProductos(self.data_productos)
 
     def _llenarTablaProductos(self, lista_datos):
+        """Llena la lista de mustra en el punto de venta con los productos existentes"""
         for item in self.tree_prod.get_children():
             self.tree_prod.delete(item)
             
         for row in lista_datos:
-            # row = (id, desc, talla, color, precio, stock)
-            self.tree_prod.insert("", "end", values=row)
+            # row = (id_var, id_prod, desc, talla, color, stock, precio)
+            # El Treeview espera: (id, desc, talla, color, precio, stock)
+            
+            # Mapeo de datos para la vista:
+            id_variante = row[0]
+            desc = row[2]
+            talla = row[3]
+            color = row[4]
+            stock = row[5]
+            precio = f"${row[6]:.2f}"
+            
+            # Insertamos solo si hay stock (Opcional, pero recomendable en POS)
+            if stock > 0:
+                self.tree_prod.insert("", "end", values=(id_variante, desc, talla, color, precio, stock))
 
     def _filtrarCatalogo(self, event=None):
         texto = self.entry_busqueda.get().lower()
@@ -194,7 +190,8 @@ class SalesView(tk.Frame):
             self._llenarTablaProductos(self.data_productos)
             return
             
-        filtrados = [p for p in self.data_productos if texto in p[1].lower()]
+        # Filtramos buscando en la descripción (índice 2 de la tupla original)
+        filtrados = [p for p in self.data_productos if texto in p[2].lower()]
         self._llenarTablaProductos(filtrados)
 
     # LOGICA DEL CARRITO 
@@ -204,15 +201,18 @@ class SalesView(tk.Frame):
         if not seleccion: return
         
         item_data = self.tree_prod.item(seleccion[0])['values']
-        # values = [id, desc, talla, color, precio, stock]
+        # values treeview = [id_var, desc, talla, color, precio, stock]
         
         id_variante = item_data[0]
         desc_completa = f"{item_data[1]} ({item_data[2]}/{item_data[3]})"
-        precio = float(item_data[4])
+        
+        # Limpiamos el signo de pesos para convertir a float
+        precio_str = str(item_data[4]).replace("$", "")
+        precio = float(precio_str)
         stock_max = int(item_data[5])
         
         # Pedir cantidad
-        cantidad_str = simpledialog.askstring("Cantidad", f"Stock disponible: {stock_max}\n¿Cuántos desea llevar?")
+        cantidad_str = simpledialog.askstring("Cantidad", f"Stock disponible: {stock_max}\n¿Cuántos desea llevar?", parent=self)
         if not cantidad_str: return
         
         try:
@@ -224,14 +224,21 @@ class SalesView(tk.Frame):
             messagebox.showerror("Error", "Debe ingresar un número entero.")
             return
 
+        # Consultamos si hay descuento automático
+        descuento_auto = self.sales_ctrl.obtenerDescuentoAutomatico(id_variante)
+        
+        #if descuento_auto > 0:
+           #messagebox.showinfo("¡Oferta!", f"Este producto tiene un {descuento_auto}% de descuento automático.")
+
         # Verificar si ya existe en carrito
-        for i, item in enumerate(self.carrito):
+        for item in self.carrito:
             if item['id_variante'] == id_variante:
-                # Sumar cantidad
                 if item['cantidad'] + cantidad > stock_max:
-                    messagebox.showwarning("Stock", "No hay suficiente stock para agregar más.")
+                    messagebox.showwarning("Stock", "No hay suficiente stock.")
                     return
                 item['cantidad'] += cantidad
+                # Actualizamos el descuento auto por si cambió
+                item['descuento_auto'] = descuento_auto 
                 self._refrescarCarrito()
                 return
 
@@ -241,8 +248,9 @@ class SalesView(tk.Frame):
             'desc': desc_completa,
             'cantidad': cantidad,
             'precio': precio,
-            'descuento_manual': 0,
-            'total': cantidad * precio
+            'descuento_manual': 0.0,
+            'descuento_auto': float(descuento_auto), # Guardamos el automático
+            'total': 0.0 # Se calcula en refrescar
         }
         self.carrito.append(nuevo_item)
         self._refrescarCarrito()
@@ -275,26 +283,47 @@ class SalesView(tk.Frame):
                 pass
 
     def _refrescarCarrito(self):
-        # Limpiar tabla
+        # Limpiar tabla visual
         for item in self.tree_cart.get_children():
             self.tree_cart.delete(item)
             
         total_global = 0.0
         
         for item in self.carrito:
-            # Calcular subtotal visual (aproximado, el backend tiene la última palabra)
-            precio_con_desc = item['precio'] * (1 - item['descuento_manual']/100)
+            # Lógica de prioridad: Manual mata a Automático
+            desc_final = 0.0
+            tipo_desc = ""
+            
+            if item['descuento_manual'] > 0:
+                desc_final = item['descuento_manual']
+                tipo_desc = "(M)" # Indicador visual de Manual
+            elif item['descuento_auto'] > 0:
+                desc_final = item['descuento_auto']
+                tipo_desc = "(A)" # Indicador visual de Automático
+            
+            # Cálculo matemático
+            precio_con_desc = item['precio'] * (1 - desc_final / 100)
             subtotal = precio_con_desc * item['cantidad']
-            item['total'] = subtotal # Actualizar modelo
+            
+            item['total'] = subtotal
             total_global += subtotal
             
-            # Insertar en tree
-            vals = (item['desc'], item['cantidad'], f"${item['precio']:.2f}", f"{item['descuento_manual']}%", f"${subtotal:.2f}")
+            # Texto para la columna descuento
+            txt_descuento = f"{desc_final:.0f}% {tipo_desc}" if desc_final > 0 else "0%"
+
+            # Insertar en treeview
+            vals = (
+                item['desc'], 
+                item['cantidad'], 
+                f"${item['precio']:.2f}", 
+                txt_descuento, 
+                f"${subtotal:.2f}"
+            )
             self.tree_cart.insert("", "end", values=vals)
             
         self.lbl_total.config(text=f"TOTAL: ${total_global:.2f}")
 
-    # --- LÓGICA DE CLIENTE ---
+    # LÓGICA DE CLIENTE
 
     def _buscarCliente(self):
         tel = self.entry_tel.get().strip()
@@ -307,11 +336,9 @@ class SalesView(tk.Frame):
         else:
             resp = messagebox.askyesno("No encontrado", "Cliente no encontrado. ¿Desea registrarlo ahora?")
             if resp:
-                # Aquí podríamos abrir un modal de registro rápido, similar al de productos.
-                # Por brevedad, simplemente avisamos.
                 messagebox.showinfo("Info", "Por favor vaya al módulo de Clientes para registrarlo.")
 
-    # --- LÓGICA DE COBRO ---
+    # LÓGICA DE COBRO 
 
     def _realizarCobro(self):
         if not self.carrito:

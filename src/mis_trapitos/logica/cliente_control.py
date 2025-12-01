@@ -97,3 +97,15 @@ class CustomerController:
         except Exception as e:
             log.error(f"Error al listar clientes: {e}")
             return []
+        
+    def eliminarCliente(self, id_empleado, id_cliente):
+        try:
+            filas = self.client_queries.eliminarCliente(id_cliente)
+            if filas:
+                self.usr_queries.registrarLog(id_empleado, "BAJA CLIENTE", f"Se eliminó cliente ID {id_cliente}")
+                return True, "Cliente eliminado."
+            else:
+                return False, "No encontrado."
+        except Exception as e:
+            log.error(f"Error eliminando cliente: {e}")
+            return False, f"Error{e}"

@@ -106,7 +106,9 @@ class AuthController:
         except Exception as e:
             log.error(f"Excepción al registrar empleado '{usuario}': {e}")
             return False, f"Error del sistema: {e}"
+    
     # METODO PUENTE    
+    
     def obtenerListaEmpleados(self):
         """Retorna todos los usuarios registrados."""
         try:
@@ -114,3 +116,22 @@ class AuthController:
         except Exception as e:
             log.error(f"Error al listar empleados: {e}")
             return []
+        
+    def eliminarEmpleado(self, id_admin, id_empleado_a_eliminar):
+        """Elimina un usuario, evitando que se elimine a sí mismo."""
+        if id_admin == id_empleado_a_eliminar:
+            return False, "No puedes eliminar tu propia cuenta mientras estás logueado."
+
+        try:
+            filas = self.queries.eliminarUsuario(id_empleado_a_eliminar)
+            if filas:
+                # Logueamos la acción usando queries internos 
+                self.queries.registrarLog(id_admin, "BAJA USUARIO", f"Se eliminó al empleado ID {id_empleado_a_eliminar}")
+                return True, "Usuario eliminado del sistema."
+            else:
+                return False, "Usuario no encontrado."
+        except Exception as e:
+            log.error(f"Error eliminando usuario: {e}")
+            if "foreign key" in str(e).lower():
+                return False, "No se puede eliminar: El usuario tiene ventas o registros históricos."
+            return False, f"Error: {e}"

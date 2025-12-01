@@ -33,6 +33,11 @@ class UsersView(tk.Frame):
             command=self.cargarDatosTabla
         ).pack(side="left", padx=5)
 
+        tk.Button(
+            frame_toolbar, text="🗑️ Eliminar", bg="#C0392B", fg="white", font=("Segoe UI", 10),
+            command=self._accionEliminar
+        ).pack(side="left", padx=5)
+
         # TABLA DE USUARIOS
         frame_tabla = tk.Frame(self)
         frame_tabla.pack(fill="both", expand=True, padx=10, pady=10)
@@ -70,6 +75,24 @@ class UsersView(tk.Frame):
 
     def _abrirModalNuevo(self):
         VentanaAltaUsuario(self)
+
+    def _accionEliminar(self):
+        seleccion = self.tree.selection()
+        if not seleccion: return
+        
+        valores = self.tree.item(seleccion[0])['values']
+        id_empleado = valores[0]
+        nombre = valores[1]
+        
+        if not messagebox.askyesno("Peligro", f"¿Estás seguro de eliminar al usuario '{nombre}'?\nEsta acción no se puede deshacer."): return
+
+        exito, msg = self.controller.eliminarEmpleado(self.usuario_admin['id'], id_empleado)
+        
+        if exito:
+            messagebox.showinfo("Éxito", msg)
+            self.cargarDatosTabla()
+        else:
+            messagebox.showerror("Error", msg)
 
 # VENTANA MODAL: ALTA USUARIO 
 class VentanaAltaUsuario(Toplevel):
