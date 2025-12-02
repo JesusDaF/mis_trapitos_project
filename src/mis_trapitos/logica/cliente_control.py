@@ -27,6 +27,7 @@ class CustomerController:
         # Opcional: Validación básica de email
         if email and "@" not in email:
             return False, "El formato del correo electrónico no parece válido."
+        email_limpio = email.strip() if (email and len(email.strip()) > 0) else None
 
         try:
             # 2. Intentar guardar
@@ -34,7 +35,7 @@ class CustomerController:
             id_cliente = self.client_queries.registrarCliente(
                 nombre.strip(), 
                 direccion.strip() if direccion else "", 
-                email.strip() if email else "", 
+                email_limpio,
                 telefono.strip()
             )
             

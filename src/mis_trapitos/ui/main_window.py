@@ -1,3 +1,4 @@
+## Vista principal 
 import tkinter as tk
 from tkinter import messagebox
 from mis_trapitos.core.logger import log

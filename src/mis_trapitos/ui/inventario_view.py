@@ -148,8 +148,8 @@ class InventoryView(tk.Frame):
             return
 
         # Obtenemos datos del producto seleccionado
-        item_id = self.tree.item(seleccion[0])['values'][0] # ID Producto
-        desc_prod = self.tree.item(seleccion[0])['values'][1] # Descripción
+        item_id = self.tree.item(seleccion[0])['values'][1] # ID Producto
+        desc_prod = self.tree.item(seleccion[0])['values'][2] # Descripción
         
         VentanaVincularProveedor(self, item_id, desc_prod)
 
@@ -216,10 +216,10 @@ class InventoryView(tk.Frame):
             messagebox.showwarning("Atención", "Seleccione un producto para ver sus proveedores.")
             return
 
-        # Obtenemos el ID del producto (recuerda que ya configuramos la columna ID oculta/visible)
+        # Obtenemos el ID del producto 
         item_data = self.tree.item(seleccion[0])['values']
-        id_producto = item_data[0] 
-        nombre_producto = item_data[1]
+        id_producto = item_data[1] 
+        nombre_producto = item_data[2]
         
         VentanaListaProveedores(self, id_producto, nombre_producto)
 
